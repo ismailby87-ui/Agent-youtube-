@@ -8,27 +8,30 @@ st.set_page_config(page_title="Ghost-Reels Factory", layout="wide")
 
 st.title("🏭 Ghost-Reels Factory")
 
-# Utilisation des "secrets" de Streamlit ou saisie manuelle
+# --- FORMULAIRE POUR FIXER LES DONNÉES SUR TABLETTE ---
 with st.sidebar:
     st.header("🔑 Configuration")
-    api_key = st.text_input("OpenAI API Key", type="password")
-    st.info("Astuce : Si rien ne se passe, vérifie que ta clé OpenAI est active.")
+    # On utilise une clé unique pour que la tablette s'en souvienne
+    api_key_input = st.text_input("OpenAI API Key", type="password", key="my_api_key")
 
-col1, col2 = st.columns([1, 1])
+with st.container():
+    st.subheader("📥 Lancement du Projet")
+    
+    # Création d'un formulaire : tout ce qui est dedans est envoyé d'un coup
+    with st.form("main_form"):
+        url_input = st.text_input("Colle le lien ici (TikTok, Insta, YouTube)", key="my_url")
+        submit_button = st.form_submit_button("🚀 LANCER LA GÉNÉRATION")
 
-with col1:
-    st.subheader("📥 Source")
-    url = st.text_input("Colle le lien ici (TikTok, Insta, YouTube)")
-    lancer = st.button("🚀 LANCER LA GÉNÉRATION")
-
-if lancer:
-    if not api_key or not url:
-        st.warning("⚠️ Remplis la clé API et l'URL d'abord.")
+# --- LOGIQUE DE TRAVAIL ---
+if submit_button:
+    # On vérifie si les cases sont vides
+    if not api_key_input or not url_input:
+        st.error("⚠️ Attention : Tu dois coller l'API et l'URL avant de cliquer sur le bouton.")
     else:
         try:
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=api_key_input)
             
-            # --- PHASE 1 : TÉLÉCHARGEMENT ---
+            # 1. TÉLÉCHARGEMENT
             with st.status("Étape 1 : Téléchargement...") as status:
                 if os.path.exists("video.mp4"): os.remove("video.mp4")
                 
@@ -39,50 +42,36 @@ if lancer:
                     'no_warnings': True
                 }
                 with YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([url])
-                
-                if os.path.exists("video.mp4"):
-                    st.write("✅ Vidéo capturée !")
-                else:
-                    st.error("❌ Le téléchargement a échoué.")
-                    st.stop()
+                    ydl.download([url_input])
+                st.write("✅ Vidéo capturée !")
 
-            # --- PHASE 2 : IA ---
+            # 2. IA
             with st.status("Étape 2 : Intelligence Artificielle...") as status:
                 res = client.chat.completions.create(
                     model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": "Donne moi un titre viral de 3 mots max pour une vidéo courte. Réponds juste le titre."}]
+                    messages=[{"role": "user", "content": "Donne moi un titre viral de 3 mots max. Réponds juste le titre."}]
                 )
                 titre = res.choices[0].message.content
-                st.write(f"✅ Titre généré : {titre}")
+                st.write(f"✅ Titre : {titre}")
 
-            # --- PHASE 3 : MONTAGE GHOST ---
+            # 3. MONTAGE GHOST
             with st.status("Étape 3 : Montage Ghost...") as status:
                 if os.path.exists("output.mp4"): os.remove("output.mp4")
                 
-                # Commande FFmpeg simplifiée au maximum pour éviter les bugs de police
-                # On fait : Miroir + Zoom + Vitesse
-                cmd = (
-                    f'ffmpeg -y -i video.mp4 '
-                    f'-vf "hflip,setpts=0.95*PTS,scale=1.1*iw:-1,crop=iw/1.1:ih/1.1" '
-                    f'-c:a copy output.mp4'
-                )
-                
-                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                
-                if os.path.exists("output.mp4"):
-                    st.write("✅ Montage terminé !")
-                else:
-                    st.error("❌ Erreur montage : " + result.stderr)
-                    st.stop()
+                # Montage simple pour tablette
+                cmd = f'ffmpeg -y -i video.mp4 -vf "hflip,setpts=0.95*PTS,scale=1.1*iw:-1,crop=iw/1.1:ih/1.1" -c:a copy output.mp4'
+                subprocess.run(cmd, shell=True, capture_output=True)
+                st.write("✅ Montage terminé !")
 
-            # --- PHASE 4 : AFFICHAGE ---
-            with col2:
-                st.subheader("🎬 Résultat Final")
+            # 4. AFFICHAGE
+            st.divider()
+            col_v, col_t = st.columns([1,1])
+            with col_v:
                 st.video("output.mp4")
-                st.success(f"Titre : {titre}")
+            with col_t:
+                st.success(f"**Titre :** {titre}")
                 with open("output.mp4", "rb") as f:
-                    st.download_button("📥 SAUVEGARDER SUR TABLETTE", f, file_name="ghost_video.mp4")
+                    st.download_button("📥 SAUVEGARDER SUR TABLETTE", f, file_name="video_finale.mp4")
 
         except Exception as e:
-            st.error(f"💥 Erreur globale : {str(e)}")
+            st.error(f"💥 Erreur : {str(e)}")
